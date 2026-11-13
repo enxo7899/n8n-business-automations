@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>n8n automations · live demo</title>
+<meta name="description" content="Live demo of two n8n workflows: AI enquiry triage with business-rule overrides, and invoice validation. The real Code node logic runs in your browser." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #f5f4f0; --card: #fff; --ink: #161a1d; --muted: #656b70; --line: #dddcd5; --line-2: #ebeae5;
+    --teal: #0b6e69; --teal-bg: #e1f0ee; --ok: #1d7a46; --ok-bg: #e3f2e8; --warn: #915f08; --warn-bg: #fbf0d8; --bad: #b3261e; --bad-bg: #fbe8e6; --skip: #a6aaad;
+    --sans: "Onest", system-ui, sans-serif; --mono: "Fira Code", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--sans); }
+  a { color: inherit; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+  .demo { border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .demo .wrap { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: space-between; padding-top: 9px; padding-bottom: 9px; }
+  .demo b { color: var(--ink); font-weight: 600; }
+
+  header { padding: 48px 0 28px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: end; }
+  h1 { font: 700 clamp(34px, 4.8vw, 58px)/1.02 var(--sans); letter-spacing: -1.8px; margin: 0 0 16px; }
+  h1 em { font-style: normal; color: var(--teal); }
+  header p { margin: 0; color: #3f4448; font-size: 16.5px; max-width: 580px; }
+  .facts { list-style: none; margin: 0; padding: 0; font-size: 14px; border-top: 1px solid var(--ink); }
+  .facts li { padding: 9px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 150px 1fr; gap: 12px; }
+  .facts code { font: 12.5px var(--mono); color: var(--teal); }
+  .facts span code { color: inherit; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+  .tabs button { border: 0; background: none; padding: 10px 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .tabs .num { font: 12px var(--mono); margin-right: 6px; color: var(--skip); }
+
+  .lay { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; min-width: 0; }
+  .ph { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .ph h2 { font: 600 14px var(--sans); margin: 0; }
+  .ph .sub { font-size: 12.5px; color: var(--muted); }
+  .ph .right { margin-left: auto; }
+  .pb { padding: 14px 16px; }
+  .stack > * + * { margin-top: 20px; }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .presets button { border: 1px solid var(--line); background: transparent; border-radius: 6px; padding: 4px 9px; font-size: 12.5px; }
+  .presets button:hover, .presets button[aria-pressed="true"] { border-color: var(--ink); }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+  input, textarea, select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: #fff; color: var(--ink); font-size: 14px; }
+  textarea { min-height: 96px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--teal-bg); border-color: var(--teal); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn { border: 1px solid var(--ink); background: var(--ink); color: #fff; border-radius: 8px; padding: 9px 16px; font-weight: 600; font-size: 14px; }
+  .btn:hover { background: #2c3236; }
+  .model { margin-top: 16px; padding: 12px; border: 1px dashed var(--line); border-radius: 8px; }
+  .model label { margin-top: 0; }
+  .model p { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+
+  /* execution */
+  .exec { padding: 16px; background-image: radial-gradient(#d7d6cf 1px, transparent 1px); background-size: 16px 16px; border-radius: 0 0 12px 12px; }
+  .node { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-left: 22px; }
+  .node + .node, .node + .branch, .branch + .node { margin-top: 14px; }
+  .node::before { content: ""; position: absolute; left: -15px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--skip); box-shadow: 0 0 0 3px var(--paper); }
+  .node:not(:last-child)::after { content: ""; position: absolute; left: -11px; top: 30px; bottom: -16px; width: 2px; background: var(--line); }
+  .node.ok::before { background: var(--ok); } .node.warn::before { background: var(--warn); } .node.bad::before { background: var(--bad); }
+  .node.skip { opacity: .55; }
+  .node > summary { list-style: none; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 14px; cursor: pointer; }
+  .node > summary::-webkit-details-marker { display: none; }
+  .node .nm { font-weight: 600; font-size: 14.5px; }
+  .node .ty { font: 12px var(--mono); color: var(--muted); grid-column: 1; }
+  .node .st { grid-row: 1 / span 2; grid-column: 2; align-self: center; font: 500 12px var(--mono); padding: 2px 8px; border-radius: 5px; background: var(--line-2); color: var(--muted); }
+  .node.ok .st { background: var(--ok-bg); color: var(--ok); } .node.warn .st { background: var(--warn-bg); color: var(--warn); } .node.bad .st { background: var(--bad-bg); color: var(--bad); }
+  .node .why { grid-column: 1 / -1; font-size: 13px; color: #3f4448; margin-top: 4px; }
+  .node .tag { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--teal-bg); color: var(--teal); margin-left: 6px; vertical-align: 2px; }
+  .node .tag.stand { background: var(--warn-bg); color: var(--warn); }
+  .node pre { margin: 0; padding: 12px 14px; border-top: 1px solid var(--line-2); font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: #fbfbf9; border-radius: 0 0 10px 10px; max-height: 320px; overflow: auto; }
+  .exec .empty { color: var(--muted); font-size: 14px; padding: 28px 8px; text-align: center; background: var(--card); border-radius: 10px; border: 1px dashed var(--line); }
+
+  /* outcome */
+  .apps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .sheet { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sheet th, .sheet td { border: 1px solid var(--line-2); padding: 6px 8px; text-align: left; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .sheet th { font: 500 11.5px var(--mono); color: var(--muted); background: #f7f7f4; }
+  .sheet td.hi { color: var(--bad); font-weight: 600; }
+  .sheet tr.new td { animation: hl 1.6s ease-out; }
+  @keyframes hl { from { background: #fff3c4; } }
+  .scroll { overflow-x: auto; }
+  .feed { display: grid; gap: 10px; }
+  .msg { font-size: 13.5px; border-left: 3px solid var(--bad); padding: 4px 0 4px 10px; }
+  .msg b { font-weight: 600; }
+  .msg small { display: block; color: var(--muted); font-size: 12px; }
+  .draft { font-size: 13.5px; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; }
+  .draft .to { font: 12px var(--mono); color: var(--muted); }
+  .draft p { margin: 6px 0 0; }
+  .draft .lbl { font: 500 11px var(--mono); color: var(--warn); }
+  .none { color: var(--muted); font-size: 13.5px; }
+
+  .check { display: grid; gap: 8px; }
+  .check li { list-style: none; display: flex; gap: 10px; font-size: 14px; }
+  .check { padding: 0; margin: 0; }
+  .ico { width: 20px; text-align: center; font-weight: 700; }
+  .ico.y { color: var(--ok); } .ico.n { color: var(--bad); }
+  .verdict { margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-weight: 600; }
+  .verdict.ok { background: var(--ok-bg); color: var(--ok); } .verdict.bad { background: var(--bad-bg); color: var(--bad); }
+  .verdict small { display: block; font-weight: 400; margin-top: 2px; }
+  .lines { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+  .lines td { padding: 4px 0; }
+  .lines input { padding: 5px 8px; }
+  .lines td:last-child { width: 110px; padding-left: 8px; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 24px 0 40px; font-size: 13.5px; color: var(--muted); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+
+  @media (max-width: 1000px) { header, .lay, .apps { grid-template-columns: 1fr; } header { gap: 28px; padding-top: 32px; } }
+  @media (max-width: 480px) { .wrap { padding: 0 14px; } .two { grid-template-columns: 1fr; } .facts li { grid-template-columns: 110px 1fr; } }
+</style>
+</head>
+<body>
+<div class="demo"><div class="wrap">
+  <span><b>Live demo by EmSoft.</b> The business and every message are fictional. The Code node logic is the real file from <code>code/</code>, running in your browser.</span>
+  <a href="https://github.com/enxo7899/n8n-business-automations">Source on GitHub →</a>
+</div></div>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>AI reads the enquiry. <em>Plain code checks it</em> before anyone acts.</h1>
+      <p>Two of the four n8n workflows, runnable here. Send an enquiry and watch each node's output, or change an invoice's numbers and see what the validator lets through. In n8n the AI steps call Claude; here an offline stand-in returns the same JSON so the real nodes after it can run.</p>
+    </div>
+    <ul class="facts">
+      <li><code>4 workflows</code><span>Enquiry triage, invoice extraction, morning summary, error alerts</span></li>
+      <li><code>n8n 1.123</code><span>Every workflow file imports cleanly</span></li>
+      <li><code>11 tests</code><span>Run the Code nodes with n8n's <code>$input</code> mocked, in CI</span></li>
+      <li><code>0 keys in files</code><span>API keys live in n8n credentials only</span></li>
+    </ul>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="enq"><span class="num">01</span>New enquiry → AI triage</button>
+    <button role="tab" aria-selected="false" data-tab="inv"><span class="num">02</span>Invoice → validate → books</button>
+  </div>
+
+  <!-- ===================================================== enquiry triage -->
+  <section id="tab-enq">
+    <div class="lay">
+      <div class="panel">
+        <div class="ph"><h2>Website contact form</h2><span class="sub">posts to the webhook</span></div>
+        <form class="pb" id="enqForm" autocomplete="off">
+          <div class="presets" id="enqPresets"></div>
+          <div class="two">
+            <div><label for="f-name">Name</label><input id="f-name" /></div>
+            <div><label for="f-phone">Phone</label><input id="f-phone" /></div>
+          </div>
+          <label for="f-email">Email</label><input id="f-email" />
+          <label for="f-msg">Message</label><textarea id="f-msg"></textarea>
+          <div class="model">
+            <label for="f-model">What the AI step returns</label>
+            <select id="f-model">
+              <option value="good">A sensible answer</option>
+              <option value="wrong">A wrong answer (calls everything low-priority support)</option>
+              <option value="fail">Nothing usable (timeout or broken JSON)</option>
+            </select>
+            <p>Switch this to see the rules in "Parse AI triage" catch a bad model answer.</p>
+          </div>
+          <div style="margin-top:16px"><button class="btn" type="submit">Send enquiry</button></div>
+        </form>
+      </div>
+
+      <div class="stack">
+        <div class="panel">
+          <div class="ph"><h2>Execution</h2><span class="sub" id="execSub">click a node to see its output</span></div>
+          <div class="exec" id="enqExec"><div class="empty">Pick an example or write your own, then send it.</div></div>
+        </div>
+        <div class="apps">
+          <div class="panel">
+            <div class="ph"><h2>Leads sheet</h2><span class="sub">Google Sheets</span></div>
+            <div class="scroll"><table class="sheet"><thead><tr><th>name</th><th>category</th><th>urgency</th><th>lang</th><th>summary</th></tr></thead><tbody id="sheet"></tbody></table></div>
+            <div class="pb none" id="sheetNone">No rows yet.</div>
+          </div>
+          <div class="panel">
+            <div class="ph"><h2>#urgent</h2><span class="sub">Slack</span></div>
+            <div class="pb feed" id="slack"><span class="none">Only urgent enquiries post here.</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2>Gmail drafts</h2><span class="sub">a person reviews and sends</span></div>
+          <div class="pb feed" id="drafts"><span class="none">Each real enquiry gets a draft reply in the customer's language. Nothing is sent automatically.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== invoice -->
+  <section id="tab-inv" hidden>
+    <div class="lay">
+      <div class="panel">
+        <div class="ph"><h2>What the AI read from the PDF</h2></div>
+        <div class="pb" id="invForm">
+          <div class="presets" id="invPresets"></div>
+          <label for="i-supplier">Supplier</label><input id="i-supplier" />
+          <div class="two">
+            <div><label for="i-number">Invoice number</label><input id="i-number" /></div>
+            <div><label for="i-date">Invoice date</label><input id="i-date" /></div>
+          </div>
+          <div class="two">
+            <div><label for="i-currency">Currency</label><input id="i-currency" /></div>
+            <div><label for="i-net">Net</label><input id="i-net" inputmode="decimal" /></div>
+          </div>
+          <div class="two">
+            <div><label for="i-vat">VAT</label><input id="i-vat" inputmode="decimal" /></div>
+            <div><label for="i-total">Total</label><input id="i-total" inputmode="decimal" /></div>
+          </div>
+          <label>Line items</label>
+          <table class="lines"><tbody id="i-lines"></tbody></table>
+          <p class="none" style="margin:12px 0 0">Edit any number. The validator re-runs as you type.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="panel">
+          <div class="ph"><h2>Validate invoice</h2><span class="sub">code/validate-invoice.js</span></div>
+          <div class="pb"><ul class="check" id="checks"></ul><div id="verdict"></div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h2>Node output</h2><span class="sub">what goes to the next node</span></div>
+          <pre class="pb" id="invOut" style="margin:0;font:12px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer><div class="wrap">
+  <span>Built by <a href="https://github.com/enxo7899">EmSoft</a>: n8n and AI automation for small businesses.</span>
+  <span>MIT licensed</span>
+</div></footer>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  // Load the real Code node files and run them the way n8n does: $input.all() and $("Node name").all().
+  const files = ["normalise-enquiry", "parse-ai-triage", "validate-invoice"];
+  const src = Object.fromEntries(await Promise.all(files.map(async (f) => [f, await fetch(`code/${f}.js`).then((r) => r.text())])));
+  const invoices = await fetch("samples/invoices.json").then((r) => r.json());
+  const wrap = (arr) => ({ all: () => arr.map((json) => ({ json })) });
+  const runNode = (file, items, others = {}) => new Function("$input", "$", src[file])(wrap(items), (n) => wrap(others[n] ?? [])).map((i) => i.json);
+
+  // ---------------------------------------------------------------- tabs
+  document.querySelectorAll("[data-tab]").forEach((t) => (t.onclick = () => {
+    document.querySelectorAll("[data-tab]").forEach((x) => x.setAttribute("aria-selected", x === t));
+    $("tab-enq").hidden = t.dataset.tab !== "enq";
+    $("tab-inv").hidden = t.dataset.tab !== "inv";
+  }));
+
+  // ---------------------------------------------------------------- AI stand-in
+  // Offline stand-in for the Claude call. Same JSON schema as the real request
+  // in scripts/build.mjs, so "Parse AI triage" receives exactly what it would in n8n.
+  function standIn(e, mode) {
+    if (mode === "fail") return { content: [{ type: "text", text: "{\"category\": \"compl" }] };
+    if (mode === "wrong") return { content: [{ type: "text", text: JSON.stringify({ category: "support", urgency: "low", language: "en", summary: "General question", draft_reply: "Thanks for getting in touch.", needs_review: false }) }] };
+    const m = e.message.toLowerCase();
+    const lang = /[ëç]|pershendetje|përshëndetje|faleminderit|sa kushton|dua |jam /.test(m) ? "sq" : /\b(ciao|buongiorno|ho |non |vorrei|grazie|quanto)\b/.test(m) ? "it" : "en";
+    const category = /cheap followers|crypto|casino|seo services|click here/.test(m) ? "spam"
+      : /refund|rimborso|not arrived|non è arrivato|complain|reklam|angry|terrible/.test(m) ? "complaint"
+      : /book|appointment|reserve|prenot|rezerv|takim/.test(m) ? "booking"
+      : /price|cost|quote|how much|sa kushton|quanto costa|preventivo|cmim/.test(m) ? "quote_request"
+      : /help|problem|doesn't work|non funziona|nuk punon|login/.test(m) ? "support" : "new_customer";
+    const urgency = category === "complaint" ? "high" : category === "spam" ? "low" : "normal";
+    const summaries = { spam: "Unsolicited promotion", complaint: "Customer complaint, wants it resolved", booking: "Wants to book an appointment", quote_request: "Asks for a price", support: "Needs help with an existing service", new_customer: "New customer enquiry" };
+    const replies = {
+      en: { complaint: "I'm sorry about this. I've passed it to the team and someone will contact you today.", quote_request: "Thanks for asking. We'll send you a tailored quote shortly.", booking: "Thanks! We'll confirm a time with you shortly.", default: "Thanks for your message. We'll get back to you shortly." },
+      it: { complaint: "Ci scusiamo per il disagio. Abbiamo inoltrato la segnalazione e la contatteremo oggi.", quote_request: "Grazie per la richiesta. Le invieremo a breve un preventivo.", booking: "Grazie! La ricontatteremo a breve per confermare l'orario.", default: "Grazie per il messaggio. La ricontatteremo a breve." },
+      sq: { complaint: "Na vjen keq për këtë. Ia kemi kaluar ekipit dhe do t'ju kontaktojmë sot.", quote_request: "Faleminderit për pyetjen. Do t'ju dërgojmë së shpejti një ofertë.", booking: "Faleminderit! Do t'ju konfirmojmë orarin së shpejti.", default: "Faleminderit për mesazhin. Do t'ju kthejmë përgjigje së shpejti." },
+    };
+    const draft = category === "spam" ? "" : replies[lang][category] ?? replies[lang].default;
+    return { content: [{ type: "text", text: JSON.stringify({ category, urgency, language: lang, summary: summaries[category], draft_reply: draft, needs_review: false }) }] };
+  }
+
+  // ---------------------------------------------------------------- enquiry workflow
+  const PRESETS = [
+    ["Price question (Albanian)", { name: "Ana Hoxha", email: "Ana.Hoxha@example.com ", phone: "+355 69 123 4567", message: "Përshëndetje, sa kushton një website me 5 faqe?" }, "good"],
+    ["Refund (Italian)", { name: "Marco Bianchi", email: "marco@example.it", phone: "", message: "Ho ordinato due settimane fa e non è arrivato nulla. Voglio un refund." }, "good"],
+    ["Refund, AI gets it wrong", { name: "Marco Bianchi", email: "marco@example.it", phone: "", message: "Ho ordinato due settimane fa e non è arrivato nulla. Voglio un refund." }, "wrong"],
+    ["Booking (English)", { name: "Sophie Martin", email: "sophie@example.fr", phone: "", message: "Hi, can I book a consultation next Thursday afternoon?" }, "good"],
+    ["Spam", { name: "Bot", email: "promo@spam.example", phone: "", message: "Buy cheap followers now!!!" }, "good"],
+    ["No contact details", { name: "Someone", email: "not-an-email", phone: "12", message: "Call me" }, "good"],
+    ["AI call fails", { name: "Erion Gjoka", email: "erion@example.al", phone: "+355 68 222 3344", message: "Hello, I'd like to know if you also do logo design." }, "fail"],
+  ];
+  let presetIdx = 0;
+  $("enqPresets").innerHTML = PRESETS.map(([l], i) => `<button type="button" data-p="${i}" aria-pressed="${i === 0}">${esc(l)}</button>`).join("");
+  function loadPreset(i) {
+    presetIdx = i;
+    const [, f, mode] = PRESETS[i];
+    $("f-name").value = f.name; $("f-email").value = f.email; $("f-phone").value = f.phone; $("f-msg").value = f.message; $("f-model").value = mode;
+    document.querySelectorAll("#enqPresets button").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.p === i));
+  }
+  $("enqPresets").onclick = (e) => { const b = e.target.closest("[data-p]"); if (b) { loadPreset(+b.dataset.p); runEnquiry(); } };
+  loadPreset(0);
+
+  const node = (name, type, status, label, why, output, extra = "") =>
+    `<details class="node ${status}"><summary><span class="nm">${esc(name)}${extra}</span><span class="ty">${esc(type)}</span><span class="st">${esc(label)}</span>${why ? `<span class="why">${why}</span>` : ""}</summary>${output !== undefined ? `<pre>${esc(typeof output === "string" ? output : JSON.stringify(output, null, 2))}</pre>` : ""}</details>`;
+  const skipped = (name, type) => node(name, type, "skip", "not run");
+
+  const sheetRows = [], slack = [], drafts = [];
+  function runEnquiry() {
+    const body = { name: $("f-name").value, email: $("f-email").value, phone: $("f-phone").value, message: $("f-msg").value, source: "website" };
+    const mode = $("f-model").value;
+    const html = [node("New enquiry", "Webhook · POST /enquiry", "ok", "1 item", "", { body })];
+    const [enq] = runNode("normalise-enquiry", [{ body }]);
+    html.push(node("Normalise enquiry", "Code", "ok", "1 item", "Different form layouts become one record. Email lower-cased, phone digits only.", enq, `<span class="tag">real code</span>`));
+    if (!enq.valid) {
+      html.push(node("Has message and contact?", "IF", "bad", "false", "No valid email or phone, so the workflow stops before calling the AI.", { valid: false }));
+      html.push(node("Reply 400", "Respond to Webhook", "warn", "400", "", { ok: false, error: "A message and a valid email or phone are required" }));
+      ["Claude triage", "Parse AI triage", "Log to Leads sheet", "Urgent? → Slack", "Create Gmail draft reply"].forEach((n) => html.push(skipped(n, "")));
+      return show(html);
+    }
+    html.push(node("Has message and contact?", "IF", "ok", "true", "", { valid: true }));
+    const ai = standIn(enq, mode);
+    const aiText = ai.content[0].text;
+    html.push(node("Claude triage", "HTTP Request · Messages API, JSON schema output", mode === "fail" ? "bad" : mode === "wrong" ? "warn" : "ok", mode === "fail" ? "bad output" : "1 item",
+      mode === "fail" ? "The model's answer is cut off and isn't valid JSON." : mode === "wrong" ? "The model misread this one: low-priority support." : "Category, urgency, language, summary and a draft reply.", ai, `<span class="tag stand">offline stand-in</span>`));
+    const [t] = runNode("parse-ai-triage", [ai], { "Normalise enquiry": [enq] });
+    let parsedNote = "Joins the AI answer to the enquiry and applies business rules.";
+    let aiObj = {}; try { aiObj = JSON.parse(aiText); } catch {}
+    if (mode === "fail") parsedNote = "The AI answer couldn't be read, so the enquiry is still kept and marked for review.";
+    else if (aiObj.urgency !== t.urgency) parsedNote = `<b>Rule override:</b> the AI said urgency "${esc(aiObj.urgency)}", but the message mentions a refund or cancellation, so it is <b>${t.urgency}</b>.`;
+    html.push(node("Parse AI triage", "Code", mode === "fail" || t.needs_review ? "warn" : "ok", t.needs_review ? "needs review" : "1 item", parsedNote, t, `<span class="tag">real code</span>`));
+    if (t.is_spam) {
+      html.push(node("Is spam?", "IF", "warn", "true", "Spam is acknowledged but never logged or answered.", { is_spam: true }));
+      ["Log to Leads sheet", "Urgent? → Slack", "Create Gmail draft reply"].forEach((n) => html.push(skipped(n, "")));
+    } else {
+      sheetRows.unshift(t);
+      html.push(node("Log to Leads sheet", "Google Sheets · append row", "ok", "1 row", "", { name: t.name, email: t.email, category: t.category, urgency: t.urgency, summary: t.summary, needs_review: t.needs_review }));
+      if (t.urgency === "high") { slack.unshift(t); html.push(node("Urgent? → Slack", "IF + Slack", "ok", "posted", "", { channel: "#urgent", text: `Urgent ${t.category} from ${t.name}: ${t.summary}` })); }
+      else html.push(node("Urgent? → Slack", "IF", "skip", "not urgent", "", { urgency: t.urgency }));
+      if (t.draft_reply) { drafts.unshift(t); html.push(node("Create Gmail draft reply", "Gmail · create draft", "ok", "draft saved", "A person reads and sends it. Nothing goes to the customer automatically.", { to: t.email, body: t.draft_reply })); }
+      else html.push(node("Create Gmail draft reply", "Gmail", "skip", "no draft", "No usable draft from the AI, so a person writes this one.", { needs_review: true }));
+    }
+    html.push(node("Reply 200", "Respond to Webhook", "ok", "200", "", { ok: true, id: t.id }));
+    show(html);
+  }
+  function show(html) {
+    $("enqExec").innerHTML = html.join("");
+    const firstInteresting = [...$("enqExec").querySelectorAll(".node")].find((n) => n.querySelector(".why b")) ?? $("enqExec").querySelectorAll(".node")[1];
+    firstInteresting?.setAttribute("open", "");
+    renderApps();
+  }
+  function renderApps() {
+    $("sheetNone").hidden = sheetRows.length > 0;
+    $("sheet").innerHTML = sheetRows.map((r, i) => `<tr class="${i === 0 ? "new" : ""}"><td>${esc(r.name)}</td><td>${esc(r.category)}</td><td class="${r.urgency === "high" ? "hi" : ""}">${esc(r.urgency)}</td><td>${esc(r.language)}</td><td title="${esc(r.summary)}">${esc(r.summary)}</td></tr>`).join("");
+    if (slack.length) $("slack").innerHTML = slack.map((r) => `<div class="msg"><b>Urgent ${esc(r.category.replace("_", " "))}</b> from ${esc(r.name)}: ${esc(r.summary)}<small>${esc(r.email || r.phone)}</small></div>`).join("");
+    if (drafts.length) $("drafts").innerHTML = drafts.map((r) => `<div class="draft"><span class="lbl">DRAFT · NOT SENT</span> <span class="to">to ${esc(r.email || r.phone)}</span><p>${esc(r.draft_reply)}</p></div>`).join("");
+  }
+  $("enqForm").onsubmit = (e) => { e.preventDefault(); runEnquiry(); };
+
+  // ---------------------------------------------------------------- invoice workflow
+  const INV_LABELS = ["Correct invoice (ALL)", "Totals don't add up", "Missing number", "Lines ≠ net"];
+  const invSamples = [...invoices, { supplier: "Studio Grafik", invoice_number: "SG-1107", invoice_date: "2026-11-07", due_date: "2026-11-21", currency: "EUR", net: 900, vat: 180, total: 1080, lines: [{ description: "Logo design", amount: 600 }, { description: "Business cards", amount: 250 }] }];
+  let inv = null;
+  $("invPresets").innerHTML = invSamples.map((_, i) => `<button type="button" data-i="${i}" aria-pressed="${i === 0}">${esc(INV_LABELS[i] ?? `Sample ${i + 1}`)}</button>`).join("");
+  $("invPresets").onclick = (e) => { const b = e.target.closest("[data-i]"); if (b) loadInvoice(+b.dataset.i); };
+  const F = { supplier: "i-supplier", invoice_number: "i-number", invoice_date: "i-date", currency: "i-currency", net: "i-net", vat: "i-vat", total: "i-total" };
+  function loadInvoice(i) {
+    inv = structuredClone(invSamples[i]);
+    document.querySelectorAll("#invPresets button").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.i === i));
+    for (const [k, id] of Object.entries(F)) $(id).value = inv[k] ?? "";
+    $("i-lines").innerHTML = (inv.lines.length ? inv.lines : []).map((l, j) => `<tr><td><input data-l="${j}" data-k="description" value="${esc(l.description)}" /></td><td><input data-l="${j}" data-k="amount" inputmode="decimal" value="${esc(l.amount)}" /></td></tr>`).join("") || `<tr><td class="none">No line items on this invoice.</td></tr>`;
+    validate();
+  }
+  function readForm() {
+    const num = (v) => (v === "" ? undefined : Number(String(v).replace(",", ".")));
+    for (const [k, id] of Object.entries(F)) inv[k] = ["net", "vat", "total"].includes(k) ? num($(id).value) : $(id).value;
+    document.querySelectorAll("#i-lines input").forEach((el) => { inv.lines[+el.dataset.l][el.dataset.k] = el.dataset.k === "amount" ? num(el.value) : el.value; });
+  }
+  function validate() {
+    const claude = { content: [{ type: "text", text: JSON.stringify(inv) }] };
+    const [out] = runNode("validate-invoice", [claude]);
+    const has = (p) => out.problems.includes(p);
+    const sum = inv.lines.reduce((s, l) => s + Number(l.amount || 0), 0);
+    const rows = [
+      [!/missing/.test(out.problems), "Supplier, number, date, total and currency are all present", out.problems.split("; ").filter((p) => p.startsWith("missing")).join(", ")],
+      [!has("net + VAT"), `Net + VAT = total (${inv.net ?? "?"} + ${inv.vat ?? "?"} = ${Math.round(((inv.net ?? 0) + (inv.vat ?? 0)) * 100) / 100}, total ${inv.total ?? "?"})`],
+      [!has("line items"), inv.lines.length ? `Line items add up to the net (${Math.round(sum * 100) / 100})` : "Line items add up to the net (no lines, skipped)"],
+      [!has("unreadable date"), "Invoice date can be read"],
+      [!has("total is not positive"), "Total is more than zero"],
+    ];
+    $("checks").innerHTML = rows.map(([ok, t, extra]) => `<li><span class="ico ${ok ? "y" : "n"}">${ok ? "✓" : "✗"}</span><span>${esc(t)}${!ok && extra ? ` <span style="color:var(--bad)">· ${esc(extra)}</span>` : ""}</span></li>`).join("");
+    $("verdict").innerHTML = out.ok
+      ? `<div class="verdict ok">→ Added to the Invoices sheet<small>Every check passed, so it goes straight into the books.</small></div>`
+      : `<div class="verdict bad">→ Sent to the review queue<small>${esc(out.problems)}. A person checks the PDF before it reaches the books.</small></div>`;
+    $("invOut").textContent = JSON.stringify(out, null, 2);
+  }
+  $("invForm").addEventListener("input", () => { readForm(); validate(); });
+  loadInvoice(0);
+
+  // ?run=2 sends preset 2; ?tab=inv&invoice=1 opens an invoice. Used for screenshots.
+  const params = new URLSearchParams(location.search);
+  if (params.get("tab") === "inv") document.querySelector('[data-tab="inv"]').click();
+  if (params.get("invoice")) loadInvoice(+params.get("invoice"));
+  if (params.get("run")) for (const i of params.get("run").split(",")) { loadPreset(+i); runEnquiry(); }
+</script>
+</body>
+</html>

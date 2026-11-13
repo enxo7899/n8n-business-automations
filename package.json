@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node scripts/build.mjs && node --test tests/*.test.js"
+    "test": "node scripts/build.mjs && node --test tests/*.test.js",
+    "dev": "python3 -m http.server 5176",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "license": "MIT"
 }

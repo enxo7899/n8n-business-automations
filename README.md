@@ -4,6 +4,14 @@ Four ready-to-import [n8n](https://n8n.io) workflows that take repetitive admin 
 
 Every workflow imports cleanly into n8n 1.123 and the custom logic is covered by tests that run in CI.
 
+**▶ Live demo: https://enxo7899.github.io/n8n-business-automations/** (send an enquiry and watch each node's output, then pick "Refund, AI gets it wrong" to see the rules override the model; the second tab validates invoices as you edit them)
+
+The demo runs the real Code node files from `code/` in your browser. The Claude step is replaced by an offline stand-in that returns the same JSON shape, so no API key is needed and nothing leaves the page.
+
+| The rules overrule a wrong AI answer | Invoices that don't add up go to review |
+|---|---|
+| ![](docs/demo-rule-override.png) | ![](docs/demo-invoice.png) |
+
 ![Enquiry triage workflow in n8n](docs/enquiry-triage.png)
 
 ## The workflows
@@ -63,6 +71,7 @@ Sheet columns are mapped automatically from the record fields, so a blank sheet 
 
 ```bash
 npm test     # rebuilds workflows/ from code/ and runs 11 tests
+npm run dev  # demo page on http://localhost:5176 (?run=2 replays the "AI gets it wrong" example)
 ```
 
 | File | What it is |
