@@ -1,0 +1,209 @@
+{
+  "name": "3 · Daily 8am summary of yesterday's enquiries → Slack",
+  "nodes": [
+    {
+      "id": "note-0032",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -260
+      ],
+      "parameters": {
+        "content": "## Morning briefing\nEvery day at 8:00 it reads yesterday's rows from the Leads sheet (filled by workflow 1), counts them by category and source, lists urgent enquiries still open, and posts a short summary to Slack.\n\nThe counting is done in code; Claude only writes the sentences.",
+        "width": 420,
+        "height": 300,
+        "color": 4
+      }
+    },
+    {
+      "id": "cron-0027",
+      "name": "Every day at 8:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sheetread-0028",
+      "name": "Read Leads sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "id": "code-0029",
+      "name": "Yesterday's numbers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Code node: \"Yesterday's numbers\"\n// Turns yesterday's rows from the Leads sheet into counts the summary can quote.\nconst now = new Date();\nconst start = new Date(now); start.setDate(now.getDate() - 1); start.setHours(0, 0, 0, 0);\nconst end = new Date(start); end.setDate(start.getDate() + 1);\nconst rows = $input.all().map((i) => i.json).filter((r) => {\n  const t = Date.parse(r.receivedAt);\n  return t >= start.getTime() && t < end.getTime();\n});\nconst count = (key) => rows.reduce((m, r) => ((m[r[key]] = (m[r[key]] || 0) + 1), m), {});\nconst urgentOpen = rows.filter((r) => r.urgency === \"high\" && String(r.status || \"\").toLowerCase() !== \"done\");\nreturn [{\n  json: {\n    date: start.toISOString().slice(0, 10),\n    total: rows.length,\n    byCategory: count(\"category\"),\n    bySource: count(\"source\"),\n    urgentOpen: urgentOpen.map((r) => ({ id: r.id, name: r.name, summary: r.summary })),\n    spam: rows.filter((r) => r.category === \"spam\").length,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "claude-0030",
+      "name": "Claude: write summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"claude-opus-5-5\",\n  max_tokens: 2048,\n  output_config: { effort: \"low\", format: { type: \"json_schema\", schema: {\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"briefing\"],\"properties\":{\"briefing\":{\"type\":\"string\"}}} } },\n  fallbacks: \"default\",\n  system: \"You write a short morning briefing for a small-business owner from yesterday's enquiry statistics. Use only the numbers given. Plain English, at most 6 lines, lead with anything urgent still open.\",\n  messages: [{ role: \"user\", content: JSON.stringify($json) }]\n}) }}",
+        "options": {
+          "timeout": 60000,
+          "retry": {
+            "maxTries": 3
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Anthropic API key"
+        }
+      }
+    },
+    {
+      "id": "slack-0031",
+      "name": "Post to #daily",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#daily"
+        },
+        "text": "={{ JSON.parse($json.content.find(c => c.type === 'text').text).briefing }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every day at 8:00": {
+      "main": [
+        [
+          {
+            "node": "Read Leads sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads sheet": {
+      "main": [
+        [
+          {
+            "node": "Yesterday's numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yesterday's numbers": {
+      "main": [
+        [
+          {
+            "node": "Claude: write summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: write summary": {
+      "main": [
+        [
+          {
+            "node": "Post to #daily",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

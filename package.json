@@ -1,0 +1,12 @@
+{
+  "name": "n8n-business-automations",
+  "version": "1.0.0",
+  "description": "Importable n8n workflows: AI enquiry triage, invoice extraction with validation, daily summary and error alerts.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/build.mjs && node --test tests/*.test.js"
+  },
+  "license": "MIT"
+}

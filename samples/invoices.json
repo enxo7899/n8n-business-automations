@@ -1,0 +1,5 @@
+[
+  { "supplier": "Tirana Office Supplies sh.p.k.", "invoice_number": "TOS-2026-0412", "invoice_date": "2026-11-02", "due_date": "2026-12-02", "currency": "ALL", "net": 25000, "vat": 5000, "total": 30000, "lines": [{ "description": "Printer paper A4 x20", "amount": 15000 }, { "description": "Toner HP 26A", "amount": 10000 }] },
+  { "supplier": "Forniture Rossi S.r.l.", "invoice_number": "FR/889", "invoice_date": "2026-10-28", "due_date": "", "currency": "EUR", "net": 1200, "vat": 264, "total": 1500, "lines": [] },
+  { "supplier": "Unknown", "invoice_number": "", "invoice_date": "2026-11-05", "due_date": "", "currency": "EUR", "net": 0, "vat": 0, "total": 80, "lines": [] }
+]

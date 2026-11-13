@@ -1,0 +1,454 @@
+{
+  "name": "1 · New enquiry → AI triage → Sheets + Slack + draft reply",
+  "nodes": [
+    {
+      "id": "note-0016",
+      "name": "About this workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -260
+      ],
+      "parameters": {
+        "content": "## New enquiry → AI triage\nA website form, Tally or Typeform posts to the webhook.\n\n1. Clean up the payload and reject junk\n2. Claude classifies it and drafts a reply (structured JSON)\n3. Business rules override the model for complaints and refunds\n4. Every real enquiry is logged to Google Sheets\n5. Urgent ones ping Slack; all get a Gmail **draft** a person approves\n\nSpam is acknowledged but never logged.",
+        "width": 420,
+        "height": 300,
+        "color": 4
+      }
+    },
+    {
+      "id": "hook-0001",
+      "name": "New enquiry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "enquiry",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "enquiry",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-0002",
+      "name": "Normalise enquiry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Code node: \"Normalise enquiry\"\n// Accepts a website form, Typeform/Tally, or forwarded email payload and\n// returns one clean shape, so every later step can rely on it.\nconst out = [];\nfor (const item of $input.all()) {\n  const b = item.json.body ?? item.json;\n  const pick = (...keys) => keys.map((k) => b[k]).find((v) => v !== undefined && String(v).trim() !== \"\");\n  const email = String(pick(\"email\", \"Email\", \"from_email\", \"reply_to\") ?? \"\").trim().toLowerCase();\n  const phone = String(pick(\"phone\", \"Phone\", \"tel\", \"whatsapp\") ?? \"\").replace(/[^\\d+]/g, \"\");\n  const message = String(pick(\"message\", \"Message\", \"text\", \"body_plain\", \"comments\") ?? \"\").trim();\n  out.push({\n    json: {\n      id: `ENQ-${Date.now().toString(36).toUpperCase()}-${out.length}`,\n      receivedAt: new Date().toISOString(),\n      source: String(pick(\"source\", \"form_name\") ?? \"website\"),\n      name: String(pick(\"name\", \"Name\", \"full_name\", \"from_name\") ?? \"\").trim(),\n      email,\n      phone,\n      message: message.slice(0, 4000),\n      valid: Boolean(message) && (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || phone.length >= 8),\n    },\n  });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "if-0003",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-0004",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "claude-0005",
+      "name": "Claude: triage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"claude-opus-5-5\",\n  max_tokens: 2048,\n  output_config: { effort: \"low\", format: { type: \"json_schema\", schema: {\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"category\",\"urgency\",\"language\",\"summary\",\"draft_reply\",\"needs_review\"],\"properties\":{\"category\":{\"type\":\"string\",\"enum\":[\"new_customer\",\"quote_request\",\"booking\",\"complaint\",\"support\",\"spam\",\"other\"]},\"urgency\":{\"type\":\"string\",\"enum\":[\"low\",\"normal\",\"high\"]},\"language\":{\"type\":\"string\",\"description\":\"ISO 639-1 code of the customer's language\"},\"summary\":{\"type\":\"string\",\"description\":\"One sentence, in English\"},\"draft_reply\":{\"type\":\"string\",\"description\":\"Short polite reply in the customer's language. Never promise prices, dates or refunds.\"},\"needs_review\":{\"type\":\"boolean\",\"description\":\"true if unclear, sensitive, or you are unsure\"}}} } },\n  fallbacks: \"default\",\n  system: \"You triage incoming customer enquiries for a small business. Classify the enquiry, judge urgency, write a one-sentence English summary and a short draft reply in the customer's language. The draft is reviewed by a person before sending: never promise prices, dates, discounts or refunds.\",\n  messages: [{ role: \"user\", content: `From: ${$json.name} <${$json.email}> ${$json.phone}\\nSource: ${$json.source}\\n\\n${$json.message}` }]\n}) }}",
+        "options": {
+          "timeout": 60000,
+          "retry": {
+            "maxTries": 3
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Anthropic API key"
+        }
+      }
+    },
+    {
+      "id": "code-0006",
+      "name": "Parse AI triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "// Code node: \"Parse AI triage\"\n// Joins Claude's structured answer back onto the original enquiry and applies\n// business rules on top, so a model mistake can't silently drop a hot lead.\nconst enquiries = $(\"Normalise enquiry\").all();\nreturn $input.all().map((item, i) => {\n  const enquiry = enquiries[i].json;\n  let ai = {};\n  try {\n    const text = (item.json.content ?? []).find((c) => c.type === \"text\")?.text ?? \"{}\";\n    ai = JSON.parse(text);\n  } catch (e) {\n    ai = { category: \"other\", urgency: \"normal\", summary: \"AI triage failed, check manually\", needs_review: true };\n  }\n  const categories = [\"new_customer\", \"quote_request\", \"booking\", \"complaint\", \"support\", \"spam\", \"other\"];\n  const category = categories.includes(ai.category) ? ai.category : \"other\";\n  // Hard rules beat the model: complaints and anything mentioning money back are always urgent.\n  const urgent = ai.urgency === \"high\" || category === \"complaint\" || /refund|chargeback|lawyer|cancel/i.test(enquiry.message);\n  return {\n    json: {\n      ...enquiry,\n      category,\n      urgency: urgent ? \"high\" : ai.urgency === \"low\" ? \"low\" : \"normal\",\n      language: ai.language ?? \"en\",\n      summary: ai.summary ?? \"\",\n      draft_reply: ai.draft_reply ?? \"\",\n      needs_review: Boolean(ai.needs_review) || category === \"other\",\n      is_spam: category === \"spam\",\n    },\n  };\n});\n"
+      }
+    },
+    {
+      "id": "if-0007",
+      "name": "Spam?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-0008",
+              "leftValue": "={{ $json.is_spam }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sheet-0009",
+      "name": "Log to Leads sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1360,
+        0
+      ],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "id": "if-0010",
+      "name": "Urgent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-0011",
+              "leftValue": "={{ $json.urgency === 'high' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "slack-0012",
+      "name": "Alert team on Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1820,
+        -100
+      ],
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "#leads"
+        },
+        "text": "=:rotating_light: *Urgent {{ $json.category }}* from {{ $json.name }} ({{ $json.email || $json.phone }})\n>{{ $json.summary }}\nSheet row: {{ $json.id }}",
+        "otherOptions": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "",
+          "name": "Slack"
+        }
+      }
+    },
+    {
+      "id": "gmail-0013",
+      "name": "Create Gmail draft reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1820,
+        120
+      ],
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: your enquiry",
+        "message": "={{ $json.draft_reply }}",
+        "options": {
+          "sendTo": "={{ $json.email }}"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "id": "resp-0014",
+      "name": "Reply 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        -220
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, id: $json.id } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "resp-0015",
+      "name": "Reply 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        680,
+        140
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: \"A message and a valid email or phone are required\" } }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    }
+  ],
+  "connections": {
+    "New enquiry": {
+      "main": [
+        [
+          {
+            "node": "Normalise enquiry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise enquiry": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Claude: triage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: triage": {
+      "main": [
+        [
+          {
+            "node": "Parse AI triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI triage": {
+      "main": [
+        [
+          {
+            "node": "Spam?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spam?": {
+      "main": [
+        [
+          {
+            "node": "Reply 200",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log to Leads sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reply 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Leads sheet": {
+      "main": [
+        [
+          {
+            "node": "Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Urgent?": {
+      "main": [
+        [
+          {
+            "node": "Alert team on Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create Gmail draft reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Gmail draft reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
